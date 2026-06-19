@@ -18,8 +18,14 @@ window.selectedCharacter = "red";
 window.playerName = "JOUEUR";
 window.winnerName = "";
 
+// ================= KO SYSTEM =================
 window.ko = false;
 window.koTimer = 0;
+
+// ================= CINEMATIC ADD (NEW ONLY) =================
+window.endMatch = false;
+window.winner = null;
+window.slowMo = false;
 
 // ================= SYSTEM =================
 window.projectiles = window.projectiles || [];
@@ -50,6 +56,13 @@ function updateCamera() {
 
   cameraX = p1.x - canvas.width / 2;
   cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+
+  // ================= NEW : CAMERA FOCUS WINNER =================
+  if (endMatch && winner) {
+    const target = winner === "p1" ? p1 : p2;
+    cameraX = target.x - canvas.width / 2;
+    cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+  }
 }
 
 // ================= DRAW =================
@@ -87,7 +100,65 @@ function drawPlatforms() {
   }
 }
 
-// ================= PHYSICS (PROPRE + COLLISION FIX) =================
+// ================= CINEMATIC NEW =================
+function spawnExplosion(x, y) {
+  for (let i = 0; i < 60; i++) {
+    window.particles.push(new Particle(x, y));
+  }
+}
+
+function drawCrown(player) {
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.moveTo(player.x - 10, player.y - 60);
+  ctx.lineTo(player.x - 5, player.y - 80);
+  ctx.lineTo(player.x, player.y - 65);
+  ctx.lineTo(player.x + 5, player.y - 80);
+  ctx.lineTo(player.x + 10, player.y - 60);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ================= NEW : END SCREEN =================
+function drawEndScreen() {
+  if (!endMatch) return;
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  ctx.font = "60px Arial";
+  ctx.textAlign = "center";
+
+  if (winner === "p1") {
+    ctx.fillText("VICTOIRE !", canvas.width / 2, canvas.height / 2);
+  } else {
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+  }
+
+  ctx.font = "20px Arial";
+  ctx.fillText("Appuie sur R ou ENTER pour rejouer", canvas.width / 2, canvas.height / 2 + 60);
+
+  ctx.restore();
+}
+
+// ================= CINEMATIC TRIGGER =================
+function triggerEnd(win) {
+  if (endMatch) return;
+
+  endMatch = true;
+  winner = win;
+  ko = true;
+  gameOver = true;
+
+  const target = win === "p1" ? p1 : p2;
+  spawnExplosion(target.x, target.y);
+}
+
+// ================= PHYSICS =================
 function applyPhysics(player) {
   const prevY = player.y;
 
@@ -96,7 +167,6 @@ function applyPhysics(player) {
   player.y += player.vy;
 
   player.onGround = false;
-  player.touchingWall = false;
 
   for (let p of platforms) {
     const halfW = 15;
@@ -117,25 +187,17 @@ function applyPhysics(player) {
     }
   }
 
-  // WALL COLLISION (pour wall jump)
-  if (player.x <= 0) {
-    player.x = 0;
-    player.touchingWall = true;
-    player.wallDir = 1;
-  }
-
-  if (player.x >= WORLD_WIDTH - 40) {
-    player.x = WORLD_WIDTH - 40;
-    player.touchingWall = true;
-    player.wallDir = -1;
-  }
+  if (player.x <= 0) player.x = 0;
+  if (player.x >= WORLD_WIDTH - 40) player.x = WORLD_WIDTH - 40;
 }
 
 // ================= INPUT =================
 document.addEventListener("keydown", e => {
   keys[e.key.toLowerCase()] = true;
 
-  if (gameOver && e.key.toLowerCase() === "r") resetGame();
+  if (gameOver && (e.key.toLowerCase() === "r" || e.key === "Enter")) {
+    resetGame();
+  }
 });
 
 document.addEventListener("keyup", e => {
@@ -144,30 +206,22 @@ document.addEventListener("keyup", e => {
 
 // ================= PLAYER =================
 function handlePlayer() {
-  if (!p1 || !p2 || ko) return;
+  if (!p1 || !p2 || ko || endMatch) return;
 
   p1.vx = 0;
 
   if (keys["q"]) p1.vx = -4;
   if (keys["d"]) p1.vx = 4;
 
-  // JUMP
-  if (keys["z"]) {
-    if (p1.onGround) {
-      p1.vy = -12;
-    } 
-    else if (p1.touchingWall) {
-      // WALL JUMP
-      p1.vy = -12;
-      p1.vx = 6 * p1.wallDir;
-    }
+  if (keys["z"] && p1.onGround) {
+    p1.vy = -12;
   }
 
   if (keys["f"]) p1.attack(p2);
-  if (keys["e"]) p1.specialAttack && p1.specialAttack(p2);
+  if (keys["e"]) p1.specialAttack?.(p2);
 
   if (keys["r"]) {
-    p1.shoot && p1.shoot(projectiles, Projectile, p2);
+    p1.shoot?.(projectiles, Projectile, p2);
   }
 }
 
@@ -184,7 +238,16 @@ function resetGame() {
   window.particles.length = 0;
 
   ko = false;
-  koTimer = 0;
+  endMatch = false;
+  winner = null;
+}
+
+// ================= KO CHECK =================
+function checkKO() {
+  if (endMatch) return;
+
+  if (p1.hp <= 0) triggerEnd("p2");
+  if (p2.hp <= 0) triggerEnd("p1");
 }
 
 // ================= LOOP =================
@@ -192,7 +255,6 @@ function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   drawSky();
-
   updateCamera();
 
   ctx.save();
@@ -215,18 +277,16 @@ function loop() {
     return;
   }
 
-  if (ko) {
-    koTimer--;
-    if (koTimer <= 0) resetGame();
-    ctx.restore();
-    requestAnimationFrame(loop);
-    return;
-  }
-
-  handlePlayer();
+  if (!endMatch) handlePlayer();
 
   applyPhysics(p1);
   applyPhysics(p2);
+
+  if (!endMatch && window.updateAI) {
+    window.updateAI(p2, p1);
+  }
+
+  checkKO();
 
   p1.draw(ctx);
   p2.draw(ctx);
@@ -241,11 +301,21 @@ function loop() {
 
     if (pr.hit(target)) {
       target.hp -= 10;
+      spawnParticles(target.x, target.y, "hit");
       projectiles.splice(i, 1);
     }
   }
 
+  // ================= CROWN =================
+  if (endMatch) {
+    const win = winner === "p1" ? p1 : p2;
+    drawCrown(win);
+  }
+
   ctx.restore();
+
+  // ================= END SCREEN (NEW) =================
+  drawEndScreen();
 
   requestAnimationFrame(loop);
 }

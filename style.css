@@ -321,3 +321,42 @@ canvas{
     font-size:40px;
   }
 }
+#ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 900px;
+  height: 500px;
+  pointer-events: none;
+}
+
+.screen {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
+
+.glitch {
+  animation: shake 0.2s infinite;
+}
+
+.red {
+  color: #ff2b2b;
+  text-shadow: 0 0 10px red;
+}
+
+.gold {
+  color: gold;
+  text-shadow: 0 0 20px gold;
+}

@@ -13,14 +13,12 @@
   <!-- ================= MENU ================= -->
   <div id="menu">
 
-    <!-- TITLE (NON BLOQUANT UI) -->
     <h1 class="title">
       ⚡ ARCADE FIGHT ⚡
     </h1>
 
     <div class="panel">
 
-      <!-- PSEUDO -->
       <input
         id="p1Name"
         type="text"
@@ -66,6 +64,27 @@
 
   <!-- ================= GAME CANVAS ================= -->
   <canvas id="game" width="900" height="500"></canvas>
+
+  <!-- ================= UI OVERLAY (AJOUTÉ) ================= -->
+  <div id="ui-overlay">
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameOverScreen" class="screen hidden">
+      <h1 class="title glitch red">GAME OVER</h1>
+
+      <p id="finalScoreLose">Score final : 0</p>
+      <p>Appuyez sur R ou Entrée pour recommencer</p>
+    </div>
+
+    <!-- VICTORY SCREEN -->
+    <div id="victoryScreen" class="screen hidden">
+      <h1 class="title glow gold">VICTORY</h1>
+
+      <p id="finalScoreWin">Score final : 0</p>
+      <p>Niveau terminé ! Appuyez sur R ou Entrée</p>
+    </div>
+
+  </div>
 
   <!-- ================= SCRIPTS ================= -->
   <script src="js/input.js"></script>

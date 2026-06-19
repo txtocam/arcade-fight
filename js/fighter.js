@@ -23,61 +23,61 @@ class Fighter {
 
     this.dashCd = 0;
 
-    // ================= WEAPONS =================
     this.weaponState = "none";
     this.weaponTimer = 0;
 
-    // ================= FX =================
     this.slashTimer = 0;
     this.recoil = 0;
 
     this.trail = [];
 
-    // ================= EXTRA SAFE STATE =================
     this.dead = false;
+
+    this.aiControlled = false;
   }
 
   update(canvas, GROUND_Y = 350) {
     if (!canvas) return;
 
-    // ================= TRAIL =================
     this.trail.push({ x: this.x, y: this.y });
     if (this.trail.length > 8) this.trail.shift();
 
-    // ================= PHYSICS BASIC =================
     this.x += this.vx;
     this.y += this.vy;
 
-    // gravité simple fallback (si plateforme system n’écrase pas)
     if (!this.onGround) {
       this.vy += 0.8;
     }
 
-    // ================= LIMITS =================
     this.x = Math.max(20, Math.min(canvas.width - 20, this.x));
 
-    // ================= SPECIAL CHARGE =================
     this.special = Math.min(100, this.special + 0.1);
 
-    // ================= COOLDOWNS =================
     if (this.cd > 0) this.cd--;
     if (this.dashCd > 0) this.dashCd--;
 
     if (this.comboTimer > 0) this.comboTimer--;
     else this.combo = 0;
 
-    // ================= WEAPON TIMER =================
     if (this.weaponTimer > 0) {
       this.weaponTimer--;
     } else {
       this.weaponState = "none";
     }
 
-    // ================= FX TIMERS =================
     if (this.slashTimer > 0) this.slashTimer--;
 
     this.recoil *= 0.85;
-    this.vx *= 0.85;
+
+    // ================= FIX IMPORTANT =================
+    // évite blocage total de mouvement
+    if (this.aiControlled) {
+      this.vx *= 0.985;
+    } else {
+      this.vx *= 0.85;
+    }
+
+    if (Math.abs(this.vx) < 0.01) this.vx = 0;
   }
 
   draw(ctx) {
@@ -86,35 +86,29 @@ class Fighter {
     const x = this.x;
     const y = this.y;
 
-    // ================= TRAIL =================
     for (let i = 0; i < this.trail.length; i++) {
       const t = this.trail[i];
       ctx.fillStyle = `rgba(0,0,0,${i / this.trail.length * 0.2})`;
       ctx.fillRect(t.x - 8, t.y - 50, 16, 50);
     }
 
-    // ================= SHADOW =================
     ctx.fillStyle = "rgba(0,0,0,0.25)";
     ctx.beginPath();
     ctx.ellipse(x, y + 2, 16, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // ================= BODY =================
     ctx.fillStyle = this.color;
     ctx.fillRect(x - 8, y - 55, 16, 35);
 
-    // ================= HEAD =================
     ctx.fillStyle = "#1a1a1a";
     ctx.beginPath();
     ctx.arc(x, y - 65, 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // ================= EYES =================
     ctx.fillStyle = "cyan";
     ctx.fillRect(x - 4, y - 66, 2, 2);
     ctx.fillRect(x + 2, y - 66, 2, 2);
 
-    // ================= LEGS ANIM =================
     const legOffset = Math.sin(Date.now() * 0.01 + x) * 3;
 
     ctx.strokeStyle = "#111";
@@ -130,18 +124,15 @@ class Fighter {
     ctx.lineTo(x + 8 - legOffset, y);
     ctx.stroke();
 
-    // ================= HP =================
     ctx.fillStyle = "red";
     ctx.fillRect(x - 18, y - 85, 36, 4);
 
     ctx.fillStyle = "lime";
     ctx.fillRect(x - 18, y - 85, Math.max(0, this.hp * 0.36), 4);
 
-    // ================= SPECIAL =================
     ctx.fillStyle = "blue";
     ctx.fillRect(x - 18, y - 92, this.special * 0.36, 3);
 
-    // ================= WEAPONS =================
     if (this.weaponState === "knife") {
       ctx.fillStyle = "silver";
       ctx.fillRect(x + 10, y - 40, 10, 2);
@@ -162,40 +153,50 @@ class Fighter {
       ctx.fillRect(x + 22 + this.recoil, y - 38, 6, 2);
     }
 
-    // ================= DEBUG HITBOX =================
     if (window.debugHitbox) {
       ctx.strokeStyle = "yellow";
       ctx.strokeRect(x - 15, y - 60, 30, 60);
     }
   }
 
-  // ================= ATTACK =================
+  // ================= ATTACK FIX FINAL =================
   attack(enemy) {
-    if (!enemy || this.cd > 0) return;
+  if (!enemy) return;
 
-    this.cd = 12;
-
-    this.weaponState = "knife";
-    this.weaponTimer = 10;
-    this.slashTimer = 8;
-
-    this.combo++;
-    this.comboTimer = 30;
-
-    const dmg = 20;
-
-    if (Math.abs(this.x - enemy.x) < 50) {
-      const final = enemy.blocking ? dmg * 0.3 : dmg;
-
-      enemy.hp -= final;
-
-      const dir = this.x < enemy.x ? 1 : -1;
-      enemy.vx += dir * 8;
-      enemy.vy -= 2;
-    }
+  // ================= COOLDOWN NORMAL =================
+  if (this.cd > 0) {
+    this.cd--;
+    return;
   }
 
-  // ================= SPECIAL =================
+  this.cd = 8; // 🔥 plus rapide = combats plus dynamiques
+
+  this.weaponState = "knife";
+  this.weaponTimer = 10;
+  this.slashTimer = 8;
+
+  this.combo++;
+  this.comboTimer = 30;
+
+  const dmg = 20;
+
+  const dist = Math.abs(this.x - enemy.x);
+
+  // ================= HIT PLUS LARGE =================
+  // (avant 90 → maintenant plus permissif)
+  const hitRange = 110;
+
+  if (dist < hitRange) {
+    const final = enemy.blocking ? dmg * 0.3 : dmg;
+
+    enemy.hp -= final;
+
+    const dir = this.x < enemy.x ? 1 : -1;
+    enemy.vx += dir * 9; // 🔥 un peu plus de push
+    enemy.vy -= 2;
+  }
+}
+
   specialAttack(enemy) {
     if (!enemy || this.special < 100) return;
 
@@ -210,14 +211,17 @@ class Fighter {
     enemy.vy -= 4;
   }
 
-  // ================= SHOOT =================
   shoot(projectiles, ProjectileClass, enemy) {
     if (!enemy) return;
     if (!projectiles || !ProjectileClass) return;
 
-    if (Date.now() - this.lastShot < 400) return;
+    const now = Date.now();
 
-    this.lastShot = Date.now();
+    if (!this.lastShot) this.lastShot = 0;
+
+    if (now - this.lastShot < 320) return;
+
+    this.lastShot = now;
 
     this.weaponState = "gun";
     this.weaponTimer = 8;
@@ -231,7 +235,6 @@ class Fighter {
     );
   }
 
-  // ================= DASH =================
   dash(dir) {
     if (this.dashCd > 0) return;
 
@@ -241,7 +244,6 @@ class Fighter {
     this.trail = [];
   }
 
-  // ================= BLOCK =================
   block(state) {
     this.blocking = state;
   }
