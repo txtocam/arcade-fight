@@ -22,7 +22,7 @@ window.winnerName = "";
 window.ko = false;
 window.koTimer = 0;
 
-// ================= CINEMATIC ADD (NEW ONLY) =================
+// ================= CINEMATIC ADD =================
 window.endMatch = false;
 window.winner = null;
 window.slowMo = false;
@@ -32,6 +32,13 @@ window.projectiles = window.projectiles || [];
 const projectiles = window.projectiles;
 
 window.particles = window.particles || [];
+
+// ================= WEAPON ANIM STATE =================
+function setAnimTimers(player, type) {
+  if (!player) return;
+  if (type === "gun") player.gunAnim = 10;
+  if (type === "saber") player.saberAnim = 10;
+}
 
 // ================= BACKGROUND =================
 const clouds = [
@@ -47,7 +54,11 @@ const platforms = [
   { x: 550, y: 290, w: 200, h: 20 },
   { x: 850, y: 250, w: 220, h: 20 },
   { x: 1200, y: 300, w: 240, h: 20 },
-  { x: 1600, y: 260, w: 220, h: 20 }
+  { x: 1600, y: 260, w: 220, h: 20 },
+  { x: 300, y: 140, w: 200, h: 20 },
+  { x: 650, y: 140, w: 200, h: 20 },
+  { x: 1000, y: 140, w: 200, h: 20 },
+  { x: 1350, y: 140, w: 200, h: 20 },
 ];
 
 // ================= CAMERA =================
@@ -57,7 +68,6 @@ function updateCamera() {
   cameraX = p1.x - canvas.width / 2;
   cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
 
-  // ================= NEW : CAMERA FOCUS WINNER =================
   if (endMatch && winner) {
     const target = winner === "p1" ? p1 : p2;
     cameraX = target.x - canvas.width / 2;
@@ -65,7 +75,7 @@ function updateCamera() {
   }
 }
 
-// ================= DRAW =================
+// ================= DRAW SKY =================
 function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
   g.addColorStop(0, "#6ec6ff");
@@ -74,6 +84,7 @@ function drawSky() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+// ================= CLOUDS =================
 function drawClouds() {
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   for (let c of clouds) {
@@ -86,6 +97,7 @@ function drawClouds() {
   }
 }
 
+// ================= PLATFORMS =================
 function drawPlatforms() {
   for (let p of platforms) {
     const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
@@ -100,7 +112,102 @@ function drawPlatforms() {
   }
 }
 
-// ================= CINEMATIC NEW =================
+// ================= WEAPONS =================
+
+// 🔫 PISTOLET ORIENTÉ VERS ENNEMI
+function drawPistol(player, enemy) {
+  const dx = enemy.x - player.x;
+  const dy = enemy.y - player.y;
+  const angle = Math.atan2(dy, dx);
+
+  ctx.save();
+  ctx.translate(player.x + 10, player.y - 30);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = "#222";
+  ctx.fillRect(0, -3, 18, 6);
+
+  ctx.fillStyle = "#555";
+  ctx.fillRect(6, 0, 6, 10);
+
+  ctx.restore();
+}
+
+function drawSaber(player, enemy) {
+  if (!player) return;
+
+  const target = enemy || player;
+
+  const dx = target.x - player.x;
+  const dy = target.y - player.y;
+  const angle = Math.atan2(dy, dx);
+
+  const active = player.saberAnim > 0;
+
+  // animation swing (bras qui bouge)
+  const swing = active ? Math.sin(player.saberAnim * 0.4) * 0.6 : 0;
+
+  ctx.save();
+
+  // position bras
+  ctx.translate(player.x + 10, player.y - 35);
+  ctx.rotate(angle + swing);
+
+  // ================= EFFET VITESSE =================
+  if (active) {
+    ctx.strokeStyle = "rgba(180,180,255,0.25)";
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(-140, 0);
+    ctx.stroke();
+  }
+
+  // ================= KATANA COURBÉ =================
+  ctx.strokeStyle = "#cfd2d3";
+  ctx.lineWidth = 5;
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(60, -10, 120, 5); // courbure katana
+  ctx.stroke();
+
+  // tranchant lumineux
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(60, -10, 120, 5);
+  ctx.stroke();
+
+  // ================= POIGNÉE =================
+  ctx.fillStyle = "#111";
+  ctx.fillRect(-10, -3, 12, 6);
+
+  // garde
+  ctx.fillStyle = "#666";
+  ctx.fillRect(-4, -6, 4, 12);
+
+  // ================= IMPACT VISUEL =================
+  if (active) {
+    cameraShake = 5;
+
+    for (let i = 0; i < 4; i++) {
+      window.particles.push({
+        x: target.x,
+        y: target.y,
+        vx: (Math.random() - 0.5) * 6,
+        vy: (Math.random() - 0.5) * 6,
+        life: 15,
+        color: "rgba(200,200,255,0.8)"
+      });
+    }
+  }
+
+  ctx.restore();
+}
+// ================= CINEMATIC =================
 function spawnExplosion(x, y) {
   for (let i = 0; i < 60; i++) {
     window.particles.push(new Particle(x, y));
@@ -119,7 +226,7 @@ function drawCrown(player) {
   ctx.fill();
 }
 
-// ================= NEW : END SCREEN =================
+// ================= END SCREEN =================
 function drawEndScreen() {
   if (!endMatch) return;
 
@@ -145,7 +252,7 @@ function drawEndScreen() {
   ctx.restore();
 }
 
-// ================= CINEMATIC TRIGGER =================
+// ================= END =================
 function triggerEnd(win) {
   if (endMatch) return;
 
@@ -189,6 +296,9 @@ function applyPhysics(player) {
 
   if (player.x <= 0) player.x = 0;
   if (player.x >= WORLD_WIDTH - 40) player.x = WORLD_WIDTH - 40;
+
+  if (player.gunAnim > 0) player.gunAnim--;
+  if (player.saberAnim > 0) player.saberAnim--;
 }
 
 // ================= INPUT =================
@@ -217,11 +327,16 @@ function handlePlayer() {
     p1.vy = -12;
   }
 
-  if (keys["f"]) p1.attack(p2);
+  if (keys["f"]) {
+    p1.attack(p2);
+    setAnimTimers(p1, "saber");
+  }
+
   if (keys["e"]) p1.specialAttack?.(p2);
 
   if (keys["r"]) {
     p1.shoot?.(projectiles, Projectile, p2);
+    setAnimTimers(p1, "gun");
   }
 }
 
@@ -242,7 +357,7 @@ function resetGame() {
   winner = null;
 }
 
-// ================= KO CHECK =================
+// ================= KO =================
 function checkKO() {
   if (endMatch) return;
 
@@ -291,6 +406,13 @@ function loop() {
   p1.draw(ctx);
   p2.draw(ctx);
 
+  // ================= WEAPONS RENDER =================
+  if (p1.gunAnim > 0) drawPistol(p1, p2);
+  if (p1.saberAnim > 0) drawSaber(p1);
+
+  if (p2.gunAnim > 0) drawPistol(p2, p1);
+  if (p2.saberAnim > 0) drawSaber(p2);
+
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
 
@@ -306,15 +428,12 @@ function loop() {
     }
   }
 
-  // ================= CROWN =================
   if (endMatch) {
     const win = winner === "p1" ? p1 : p2;
     drawCrown(win);
   }
 
   ctx.restore();
-
-  // ================= END SCREEN (NEW) =================
   drawEndScreen();
 
   requestAnimationFrame(loop);
