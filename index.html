@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚔ Arcade Fight</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- ================= MENU ================= -->
+  <div id="menu">
+
+    <!-- TITLE (NON BLOQUANT UI) -->
+    <h1 class="title">
+      ⚡ ARCADE FIGHT ⚡
+    </h1>
+
+    <div class="panel">
+
+      <!-- PSEUDO -->
+      <input
+        id="p1Name"
+        type="text"
+        maxlength="15"
+        placeholder="TON PSEUDO"
+        autocomplete="off"
+      >
+
+      <h2>Choisis ton combattant</h2>
+
+      <div class="characters">
+
+        <button class="character-btn warrior" onclick="selectCharacter('red')">
+          🔥 Guerrier
+        </button>
+
+        <button class="character-btn ninja" onclick="selectCharacter('blue')">
+          ⚔ Ninja
+        </button>
+
+      </div>
+
+      <button class="start" onclick="startGame()">
+        START FIGHT
+      </button>
+
+      <div class="controls">
+
+        <h3>Commandes</h3>
+
+        <p>⬅ Q / ➡ D = Déplacement</p>
+        <p>⬆ Z = Saut</p>
+        <p>🛡 S = Blocage</p>
+        <p>👊 F = Attaque</p>
+        <p>✨ E = Attaque spéciale</p>
+        <p>🔮 R = Projectile</p>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ================= GAME CANVAS ================= -->
+  <canvas id="game" width="900" height="500"></canvas>
+
+  <!-- ================= SCRIPTS ================= -->
+  <script src="js/input.js"></script>
+  <script src="js/fighter.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/projectile.js"></script>
+  <script src="js/damageText.js"></script>
+  <script src="js/particle.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+
+</body>
+</html>
