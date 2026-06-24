@@ -18,14 +18,27 @@ window.selectedCharacter = "red";
 window.playerName = "JOUEUR";
 window.winnerName = "";
 
+// ================= KO SYSTEM =================
 window.ko = false;
 window.koTimer = 0;
+
+// ================= CINEMATIC ADD =================
+window.endMatch = false;
+window.winner = null;
+window.slowMo = false;
 
 // ================= SYSTEM =================
 window.projectiles = window.projectiles || [];
 const projectiles = window.projectiles;
 
 window.particles = window.particles || [];
+
+// ================= WEAPON ANIM STATE =================
+function setAnimTimers(player, type) {
+  if (!player) return;
+  if (type === "gun") player.gunAnim = 10;
+  if (type === "saber") player.saberAnim = 10;
+}
 
 // ================= BACKGROUND =================
 const clouds = [
@@ -41,7 +54,11 @@ const platforms = [
   { x: 550, y: 290, w: 200, h: 20 },
   { x: 850, y: 250, w: 220, h: 20 },
   { x: 1200, y: 300, w: 240, h: 20 },
-  { x: 1600, y: 260, w: 220, h: 20 }
+  { x: 1600, y: 260, w: 220, h: 20 },
+  { x: 300, y: 140, w: 200, h: 20 },
+  { x: 650, y: 140, w: 200, h: 20 },
+  { x: 1000, y: 140, w: 200, h: 20 },
+  { x: 1350, y: 140, w: 200, h: 20 },
 ];
 
 // ================= CAMERA =================
@@ -50,9 +67,15 @@ function updateCamera() {
 
   cameraX = p1.x - canvas.width / 2;
   cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+
+  if (endMatch && winner) {
+    const target = winner === "p1" ? p1 : p2;
+    cameraX = target.x - canvas.width / 2;
+    cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+  }
 }
 
-// ================= DRAW =================
+// ================= DRAW SKY =================
 function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
   g.addColorStop(0, "#6ec6ff");
@@ -61,6 +84,7 @@ function drawSky() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+// ================= CLOUDS =================
 function drawClouds() {
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   for (let c of clouds) {
@@ -73,6 +97,7 @@ function drawClouds() {
   }
 }
 
+// ================= PLATFORMS =================
 function drawPlatforms() {
   for (let p of platforms) {
     const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
@@ -87,7 +112,160 @@ function drawPlatforms() {
   }
 }
 
-// ================= PHYSICS (PROPRE + COLLISION FIX) =================
+// ================= WEAPONS =================
+
+// 🔫 PISTOLET ORIENTÉ VERS ENNEMI
+function drawPistol(player, enemy) {
+  const dx = enemy.x - player.x;
+  const dy = enemy.y - player.y;
+  const angle = Math.atan2(dy, dx);
+
+  ctx.save();
+  ctx.translate(player.x + 10, player.y - 30);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = "#222";
+  ctx.fillRect(0, -3, 18, 6);
+
+  ctx.fillStyle = "#555";
+  ctx.fillRect(6, 0, 6, 10);
+
+  ctx.restore();
+}
+
+function drawSaber(player, enemy) {
+  if (!player) return;
+
+  const target = enemy || player;
+
+  const dx = target.x - player.x;
+  const dy = target.y - player.y;
+  const angle = Math.atan2(dy, dx);
+
+  const active = player.saberAnim > 0;
+
+  // animation swing (bras qui bouge)
+  const swing = active ? Math.sin(player.saberAnim * 0.4) * 0.6 : 0;
+
+  ctx.save();
+
+  // position bras
+  ctx.translate(player.x + 10, player.y - 35);
+  ctx.rotate(angle + swing);
+
+  // ================= EFFET VITESSE =================
+  if (active) {
+    ctx.strokeStyle = "rgba(180,180,255,0.25)";
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(-140, 0);
+    ctx.stroke();
+  }
+
+  // ================= KATANA COURBÉ =================
+  ctx.strokeStyle = "#cfd2d3";
+  ctx.lineWidth = 5;
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(60, -10, 120, 5); // courbure katana
+  ctx.stroke();
+
+  // tranchant lumineux
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(60, -10, 120, 5);
+  ctx.stroke();
+
+  // ================= POIGNÉE =================
+  ctx.fillStyle = "#111";
+  ctx.fillRect(-10, -3, 12, 6);
+
+  // garde
+  ctx.fillStyle = "#666";
+  ctx.fillRect(-4, -6, 4, 12);
+
+  // ================= IMPACT VISUEL =================
+  if (active) {
+    cameraShake = 5;
+
+    for (let i = 0; i < 4; i++) {
+      window.particles.push({
+        x: target.x,
+        y: target.y,
+        vx: (Math.random() - 0.5) * 6,
+        vy: (Math.random() - 0.5) * 6,
+        life: 15,
+        color: "rgba(200,200,255,0.8)"
+      });
+    }
+  }
+
+  ctx.restore();
+}
+// ================= CINEMATIC =================
+function spawnExplosion(x, y) {
+  for (let i = 0; i < 60; i++) {
+    window.particles.push(new Particle(x, y));
+  }
+}
+
+function drawCrown(player) {
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.moveTo(player.x - 10, player.y - 60);
+  ctx.lineTo(player.x - 5, player.y - 80);
+  ctx.lineTo(player.x, player.y - 65);
+  ctx.lineTo(player.x + 5, player.y - 80);
+  ctx.lineTo(player.x + 10, player.y - 60);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ================= END SCREEN =================
+function drawEndScreen() {
+  if (!endMatch) return;
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  ctx.font = "60px Arial";
+  ctx.textAlign = "center";
+
+  if (winner === "p1") {
+    ctx.fillText("VICTOIRE !", canvas.width / 2, canvas.height / 2);
+  } else {
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+  }
+
+  ctx.font = "20px Arial";
+  ctx.fillText("Appuie sur R ou ENTER pour rejouer", canvas.width / 2, canvas.height / 2 + 60);
+
+  ctx.restore();
+}
+
+// ================= END =================
+function triggerEnd(win) {
+  if (endMatch) return;
+
+  endMatch = true;
+  winner = win;
+  ko = true;
+  gameOver = true;
+
+  const target = win === "p1" ? p1 : p2;
+  spawnExplosion(target.x, target.y);
+}
+
+// ================= PHYSICS =================
 function applyPhysics(player) {
   const prevY = player.y;
 
@@ -96,7 +274,6 @@ function applyPhysics(player) {
   player.y += player.vy;
 
   player.onGround = false;
-  player.touchingWall = false;
 
   for (let p of platforms) {
     const halfW = 15;
@@ -117,25 +294,20 @@ function applyPhysics(player) {
     }
   }
 
-  // WALL COLLISION (pour wall jump)
-  if (player.x <= 0) {
-    player.x = 0;
-    player.touchingWall = true;
-    player.wallDir = 1;
-  }
+  if (player.x <= 0) player.x = 0;
+  if (player.x >= WORLD_WIDTH - 40) player.x = WORLD_WIDTH - 40;
 
-  if (player.x >= WORLD_WIDTH - 40) {
-    player.x = WORLD_WIDTH - 40;
-    player.touchingWall = true;
-    player.wallDir = -1;
-  }
+  if (player.gunAnim > 0) player.gunAnim--;
+  if (player.saberAnim > 0) player.saberAnim--;
 }
 
 // ================= INPUT =================
 document.addEventListener("keydown", e => {
   keys[e.key.toLowerCase()] = true;
 
-  if (gameOver && e.key.toLowerCase() === "r") resetGame();
+  if (gameOver && (e.key.toLowerCase() === "r" || e.key === "Enter")) {
+    resetGame();
+  }
 });
 
 document.addEventListener("keyup", e => {
@@ -144,30 +316,27 @@ document.addEventListener("keyup", e => {
 
 // ================= PLAYER =================
 function handlePlayer() {
-  if (!p1 || !p2 || ko) return;
+  if (!p1 || !p2 || ko || endMatch) return;
 
   p1.vx = 0;
 
   if (keys["q"]) p1.vx = -4;
   if (keys["d"]) p1.vx = 4;
 
-  // JUMP
-  if (keys["z"]) {
-    if (p1.onGround) {
-      p1.vy = -12;
-    } 
-    else if (p1.touchingWall) {
-      // WALL JUMP
-      p1.vy = -12;
-      p1.vx = 6 * p1.wallDir;
-    }
+  if (keys["z"] && p1.onGround) {
+    p1.vy = -12;
   }
 
-  if (keys["f"]) p1.attack(p2);
-  if (keys["e"]) p1.specialAttack && p1.specialAttack(p2);
+  if (keys["f"]) {
+    p1.attack(p2);
+    setAnimTimers(p1, "saber");
+  }
+
+  if (keys["e"]) p1.specialAttack?.(p2);
 
   if (keys["r"]) {
-    p1.shoot && p1.shoot(projectiles, Projectile, p2);
+    p1.shoot?.(projectiles, Projectile, p2);
+    setAnimTimers(p1, "gun");
   }
 }
 
@@ -184,7 +353,16 @@ function resetGame() {
   window.particles.length = 0;
 
   ko = false;
-  koTimer = 0;
+  endMatch = false;
+  winner = null;
+}
+
+// ================= KO =================
+function checkKO() {
+  if (endMatch) return;
+
+  if (p1.hp <= 0) triggerEnd("p2");
+  if (p2.hp <= 0) triggerEnd("p1");
 }
 
 // ================= LOOP =================
@@ -192,7 +370,6 @@ function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   drawSky();
-
   updateCamera();
 
   ctx.save();
@@ -215,21 +392,26 @@ function loop() {
     return;
   }
 
-  if (ko) {
-    koTimer--;
-    if (koTimer <= 0) resetGame();
-    ctx.restore();
-    requestAnimationFrame(loop);
-    return;
-  }
-
-  handlePlayer();
+  if (!endMatch) handlePlayer();
 
   applyPhysics(p1);
   applyPhysics(p2);
 
+  if (!endMatch && window.updateAI) {
+    window.updateAI(p2, p1);
+  }
+
+  checkKO();
+
   p1.draw(ctx);
   p2.draw(ctx);
+
+  // ================= WEAPONS RENDER =================
+  if (p1.gunAnim > 0) drawPistol(p1, p2);
+  if (p1.saberAnim > 0) drawSaber(p1);
+
+  if (p2.gunAnim > 0) drawPistol(p2, p1);
+  if (p2.saberAnim > 0) drawSaber(p2);
 
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
@@ -241,11 +423,18 @@ function loop() {
 
     if (pr.hit(target)) {
       target.hp -= 10;
+      spawnParticles(target.x, target.y, "hit");
       projectiles.splice(i, 1);
     }
   }
 
+  if (endMatch) {
+    const win = winner === "p1" ? p1 : p2;
+    drawCrown(win);
+  }
+
   ctx.restore();
+  drawEndScreen();
 
   requestAnimationFrame(loop);
 }
